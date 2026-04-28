@@ -31,7 +31,7 @@ While this gets the basic loop working, forcing the programmer to manually wire 
 #### 2. CSP/Channels (Go-style) in Java
 **What maps naturally:** Java’s concurrency library makes basic channel communication pretty straightforward to pull off. A java.util.concurrent.BlockingQueue works great as an approximation of a buffered Go channel. The queue naturally handles the blocking behavior you need when a buffer fills up or empties out. If you need an unbuffered channel for rendezvous synchronization (where the sender waits until the receiver is ready), a SynchronousQueue perfectly maps to that requirement.  
 
-**What requires simulation:** Simulating Go's select statement—which lets a goroutine wait on whichever of multiple channels is ready first—is a massive pain. Java just doesn't have a direct equivalent. You either have to use continuous polling (which wastes CPU and introduces lag) or build a shared multiplexing queue.  
+**What requires simulation:** Simulating Go's select statement which lets a goroutine wait on whichever of multiple channels is ready first is a massive pain. Java just doesn't have a direct equivalent. You either have to use continuous polling (which wastes CPU and introduces lag) or build a shared multiplexing queue.  
 
 ```java
 // Simulating a buffered channel
@@ -40,9 +40,9 @@ ch.put(1); // blocks if full
 Integer val = ch.take(); // blocks if empty
 ```
 
-If you go the multiplexing route to simulate select, you completely lose the strict directional flow that makes Go channels safe. You also have to strip away type-safety to allow different kinds of messages into the single queue, which defeats the purpose of typed channels.
+If you go the multiplexing route to simulate select, you completely lose the strict directional flow that makes Go channels safe. You also have to strip away type safety to allow different kinds of messages into the single queue, which defeats the purpose of typed channels.
 
-**What cannot be represented well:** You simply cannot accurately represent Go's rules for simultaneous readiness in a select block. When multiple channels are ready at the same time, Go's runtime explicitly handles fair, pseudo-random selection among them. Implementing this kind of fair-choice algorithmic guarantee in user-space Java requires incredibly complex, custom locking mechanisms that tank performance and ruin the simplicity of the CSP model.
+**What cannot be represented well:** You simply cannot accurately represent Go's rules for simultaneous readiness in a select block. When multiple channels are ready at the same time, Go's runtime explicitly handles fair, pseudo random selection among them. Implementing this kind of fair choice algorithmic guarantee in user space Java requires incredibly complex, custom locking mechanisms that tank performance and ruin the simplicity of the CSP model.
 
 #### 3. Actor Model (Erlang-style) in Go
 **What maps naturally:** Goroutines are fantastic for this because they act perfectly as lightweight, isolated processes. They mirror the low memory footprint of Erlang processes, and you can spin up thousands of them without a problem. If you strictly use Go channels in a unidirectional way, they do a great job passing messages asynchronously between these isolated actors. Go's runtime scheduler is also highly optimized for handling tons of blocking goroutines at once
@@ -92,9 +92,9 @@ The state management semantics are identical: you identify the shared variables 
 **What cannot be represented well:** While the technical implementation is native, this model runs contrary to Go's core design philosophy. Idiomatic Go strongly discourages this approach, favoring the mantra: "Do not communicate by sharing memory; instead, share memory by communicating." Furthermore, just like in Java, correctness depends entirely on programmer discipline. The language and compiler do relatively little to prevent unsynchronized access natively, meaning the standard risks of deadlocks, race conditions, and thread-starvation remain fully present, requiring reliance on external tooling like Go's race detector.  
 
 #### 5. CSP/Channels (Go-style) in Elixir
-**What maps naturally:** The BEAM virtual machine makes this pretty easy on the surface. spawn or GenServer give you incredibly lightweight, isolated processes that map perfectly to the concept of goroutines. Both Go and Elixir are designed around the idea of spinning up massive numbers of concurrent entities and passing discrete data payloads between them.
+**What maps naturally:** The BEAM virtual machine makes this pretty easy on the surface. Both the spawn or GenServer give you incredibly lightweight, isolated processes that map perfectly to the concept of goroutines. Both Go and Elixir are designed around the idea of spinning up massive numbers of concurrent entities and passing discrete data payloads between them. BEAMS' sceduler handles these tiny processes with the exact same kind of efficienty that the GO runtime scheduler handles goroutines, making the build and teh way these two models work feel very similar.
 
-**What requires simulation:** The main issue is blocking. Unbuffered Go channels use "rendezvous synchronization"—the sender literally stops and blocks until the receiver is ready. Elixir’s message passing is completely asynchronous (fire-and-forget). To simulate that synchronous block, you have to build a strict call/reply mechanism.
+**What requires simulation:** The main issue is blocking. Unbuffered Go channels use "rendezvous synchronization"—the sender literally stops and blocks until the receiver is ready. Elixir’s message passing is completely asynchronous so it sends the signal then forgets it. To simulate that synchronous block, you have to build a strict call/reply mechanism.
 
 ```elixir
 # Simulating a synchronous, blocking channel send via GenServer
