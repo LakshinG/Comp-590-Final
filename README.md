@@ -5,7 +5,7 @@
 ### Part 1: The Model Matrix
 
 #### 1. Actor Model (Erlang-style) in Java
-**What maps naturally:** Java’s native threads and the java.util.concurrent package give us good tools to start with since we can easily create a dedicated thread to act as an isolated process, and use a LinkedBlockingQueue to handle asynchronous message passing. Because Java threads can block and wait on a queue indefinitely without chewing through CPU cycles, this setup naturally mimics how an Erlang process waits for new messages in its mailbox.
+**What maps naturally:** Java’s native threads and the java.util.concurrent package give us good tools to start with since we can easily create a dedicated thread to act as an isolated process, and use a LinkedBlockingQueue to handle asynchronous message passing. Because Java threads can block and wait on a queue indefinitely without going through CPU cycles, this setup naturally mimics how an Erlang process waits for new messages in its mailbox.
 
 **What requires simulation:** The biggest issue or problem here is recreating Erlang’s OTP supervision model. In Java, there’s no built in framework to automatically monitor and restart threads when they fail. So the entire supervisor has to be built from scratch. This means writing explicit logic to track thread lifecycles, handle restarts, and ensure the state is properly wiped and initialized every single time.
 
@@ -26,12 +26,12 @@ new Thread(() -> {
 
 While this gets the basic loop working, forcing the programmer to manually wire up fault tolerance introduces a ton of complexity and a high risk of race conditions during teardown.
 
-**What cannot be represented well:** The whole "let it crash" philosophy fundamentally clashes with Java's architecture. Java is built around catching exceptions locally and fixing the problem exactly where it happens. The strict checked-exception system constantly forces you to handle errors rather than just abandoning the state. On top of that, you can never guarantee true memory isolation. Since everything runs in a shared heap, object references can easily leak between threads, which completely breaks the Actor model's core promise of not having shared mutable state.
+**What cannot be represented well:** The whole let it crash philosophy does not go well with how Java itself is built to work. Java is made around catching exceptions locally and fixing the problem exactly where it happens. The strict checked exception system constantly forces you to handle errors instead of just abandoning the state. On top of that you can never guarantee true memory isolation. Since everything runs in a shared heap, object references can easily leak between threads, which completely breaks the Actor model's core promise of not having shared mutable state.
 
 #### 2. CSP/Channels (Go-style) in Java
-**What maps naturally:** Java’s concurrency library makes basic channel communication pretty straightforward to pull off. A java.util.concurrent.BlockingQueue works great as an approximation of a buffered Go channel. The queue naturally handles the blocking behavior you need when a buffer fills up or empties out. If you need an unbuffered channel for rendezvous synchronization (where the sender waits until the receiver is ready), a SynchronousQueue perfectly maps to that requirement.  
+**What maps naturally:** Java’s concurrency library makes basic channel communication pretty straightforward to pull off. A java.util.concurrent.BlockingQueue works great as an approximation of a buffered Go channel. The queue naturally handles the blocking behavior you need when a buffer fills up or empties out. Java’s SynchronousQueue is definetly the best way to copy a Go style unbuffered channel. It forces a rendezvous where the sender has to wait until a receiver is actually there to grab the data, which is exactly how Go's unbuffered channels work.
 
-**What requires simulation:** Simulating Go's select statement which lets a goroutine wait on whichever of multiple channels is ready first is a massive pain. Java just doesn't have a direct equivalent. You either have to use continuous polling (which wastes CPU and introduces lag) or build a shared multiplexing queue.  
+**What requires simulation:** Simulating Go's select statement which lets a goroutine wait on whichever of multiple channels is ready first isnt a clean process. Java just doesn't have a direct equivalent. You either have to use continuous polling (which wastes CPU and introduces lag) or build a shared multiplexing queue.  
 
 ```java
 // Simulating a buffered channel
