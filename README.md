@@ -5,9 +5,9 @@
 ### Part 1: The Model Matrix
 
 #### 1. Actor Model (Erlang-style) in Java
-**What maps naturally:** Java’s native threads and the java.util.concurrent package give us a really solid starting point. You can easily spin up a dedicated thread to act as an isolated process, and use a LinkedBlockingQueue to handle asynchronous message passing. Because Java threads can block and wait on a queue indefinitely without chewing through CPU cycles, this setup naturally mimics how an Erlang process waits for new messages in its mailbox.
+**What maps naturally:** Java’s native threads and the java.util.concurrent package give us good tools to start with since we can easily create a dedicated thread to act as an isolated process, and use a LinkedBlockingQueue to handle asynchronous message passing. Because Java threads can block and wait on a queue indefinitely without chewing through CPU cycles, this setup naturally mimics how an Erlang process waits for new messages in its mailbox.
 
-**What requires simulation:** The biggest headache here is recreating Erlang’s OTP supervision model. In Java, there’s no built-in framework to automatically monitor and restart threads when they fail. You have to build the entire supervisor structure from scratch. This means writing explicit logic to track thread lifecycles, handle restarts, and ensure the state is properly wiped and initialized every single time.
+**What requires simulation:** The biggest issue or problem here is recreating Erlang’s OTP supervision model. In Java, there’s no built in framework to automatically monitor and restart threads when they fail. So the entire supervisor has to be built from scratch. This means writing explicit logic to track thread lifecycles, handle restarts, and ensure the state is properly wiped and initialized every single time.
 
 ```java
 // Simulating an Actor's mailbox and processing loop
