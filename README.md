@@ -31,7 +31,7 @@ While this gets the basic loop working, forcing the programmer to manually wire 
 #### 2. CSP/Channels (Go-style) in Java
 **What maps naturally:** Java’s concurrency library makes basic channel communication pretty straightforward to pull off. A java.util.concurrent.BlockingQueue works great as an approximation of a buffered Go channel. The queue naturally handles the blocking behavior you need when a buffer fills up or empties out. Java’s SynchronousQueue is definetly the best way to copy a Go style unbuffered channel. It forces a point where the sender has to wait until a receiver is actually there to grab the data, which is exactly how Go's unbuffered channels work.
 
-**What requires simulation:** Simulating Go's select statement which lets a goroutine wait on whichever of multiple channels is ready first isnt a clean process. Java just doesn't have a direct equivalent. You either have to use continuous polling (which wastes CPU and introduces lag) or build a shared multiplexing queue.  
+**What requires simulation:** Simulating Go's select statement which lets a goroutine wait on whichever of multiple channels is ready first isnt a clean process. Java just doesn't have a direct equivalent to this so you either have to use continuous polling which wastes CPU and introduces lag, or build a shared multiplexing queue.  
 
 ```java
 // Simulating a buffered channel
@@ -40,14 +40,14 @@ ch.put(1); // blocks if full
 Integer val = ch.take(); // blocks if empty
 ```
 
-If you go the multiplexing route to simulate select, you completely lose the strict directional flow that makes Go channels safe. You also have to strip away type safety to allow different kinds of messages into the single queue, which defeats the purpose of typed channels.
+If we try to use multiplexing to simulate select, then you would completely lose the strict directional flow that makes Go channels safe. We also have to get rid of type safety to allow for different kinds of messages into the single queue which defeats the purpose of typed channels.
 
-**What cannot be represented well:** We just cant accurately represent Go's rules for simultaneous readiness in a select block. When multiple channels are ready at the same time, Go's runtime explicitly handles fair, pseudo random selection among them. Implementing this kind of fair choice algorithm guarantee in user space Java requires incredibly complecated, custom locking mechanisms that tank performance and ruin the simplicity of the CSP model.
+**What cannot be represented well:** Go's rules can't be accuratly represented for simultaneous readiness in a select block. When multiple channels are ready at the same time Go's runtime explicitly handles fair pseudo random selection among them. Implementing this kind of fair choice algorithm guarantee in user space Java requires complecated custom locking mechanisms that would reduce performance and ruin the simplicity of the CSP model.
 
 #### 3. Actor Model (Erlang-style) in Go
 **What maps naturally:** Goroutines are fantastic for this because they act perfectly as lightweight, isolated processes. They mirror the low memory footprint of Erlang processes, and you can spin up thousands of them without a problem. If you strictly use Go channels in a unidirectional way, they do a great job passing messages asynchronously between these isolated actors. Go's runtime scheduler is also highly optimized for handling tons of blocking goroutines at once
 
-**What requires simulation:** Erlang mailboxes are heterogeneous and use pattern matching for selective receive. To simulate a mailbox that can accept any data type in Go, you are forced to use an empty interface channel (chan interface{}).
+**What requires simulation:** Erlang mailboxes are varied and use pattern matching for selective receive. To simulate a mailbox that can accept any data type in Go, you are forced to use an empty interface channel.
 
 ```go
 // Simulating a heterogeneous mailbox
@@ -66,9 +66,9 @@ func process(mailbox chan interface{}) {
 }
 ```
 
-Selective receive requires building a custom scan loop. Because Go channels are strictly FIFO, skipping a non-matching message means you have to pop it off the channel and manually stash it somewhere else. This tanks your performance to $O(n)$ relative to the mailbox size.
+Selective receive requires building a custom scan loop. Because Go channels are strictly FIFO, skipping a non matching message means it needs to be popped off the channel and manually stash it somewhere else. This tanks the performance of it to O(n) relative to the mailbox size.
 
-**What cannot be represented well:** By using chan interface{} to accept different message types, you completely throw away Go's compile-time type safety. Furthermore, the elegance of Erlang's VM-level pattern-matched dispatch is lost entirely. Instead of clean syntax, you end up with verbose and error-prone type assertions cluttering up your business logic.
+**What cannot be represented well:** By using chan interface to accept different message types, you completely throw away Go's compile time type safety. Furthermore, the best part of Erlang's VM level pattern matched dispatch is also lost entirely. Instead of clean syntax there is a lot of wordy and error prone type assertions cluttering up the logic.
 
 #### 4. Shared Memory (Java-style) in Go
 **What maps naturally:** Because all goroutines share a single address space, the shared memory model maps completely natively. Go provides the sync package, which includes sync.Mutex and sync.RWMutex. This lets you lock down mutable state exactly the same way you would using synchronized blocks or explicit locks in Java.
@@ -85,16 +85,16 @@ func (c *SafeCounter) Inc(key string) {
     c.v[key]++
 }
 ```
-The state management semantics are identical: you identify the shared variables and ensure every access is synchronized. Performance-wise, fine-grained mutexes in Go are highly optimized and give you the direct, low-latency memory access you expect from this model.
+The way you manage state is basically the same as in Java, where you just pick out your shared variables and make sure every single access is wrapped in a sync block. From a performance standpoint, Go’s using specific mutexes are really fast and give you that direct, low latency memory access that we could get from a a shared memory model
 
-**What requires simulation / cannot be represented:** While the code runs perfectly, it heavily violates Go's design philosophy. Idiomatic Go pushes the mantra of communicating to share memory, rather than sharing memory to communicate. Just like in Java, the language doesn't magically prevent unsynchronized access natively, so you're still completely vulnerable to deadlocks and race conditions if you mess up your lock discipline. The technical fit is perfect, but the cultural and idiomatic fit is heavily discouraged.  
+**What requires simulation** Technically, nothing requires simulation. The mechanisms are fully native, and Go's underlying memory model provides the exact same happens before guarantees for locks that Java does.
 
-**What cannot be represented well:** While the technical implementation is native, this model runs contrary to Go's core design philosophy. Idiomatic Go strongly discourages this approach, favoring the mantra: "Do not communicate by sharing memory; instead, share memory by communicating." Furthermore, just like in Java, correctness depends entirely on programmer discipline. The language and compiler do relatively little to prevent unsynchronized access natively, meaning the standard risks of deadlocks, race conditions, and thread-starvation remain fully present, requiring reliance on external tooling like Go's race detector.  
+**What cannot be represented well:** While the code runs, it heavily violates Go's design philosophy. Even though it works, this style goes against the standard Go philosophy of communicating to share data. The language really wants you to use channels for coordination, so using shared memory and locks feels a bit anti pattern in this ecosystem. Just like in Java, the language doesn't magically prevent unsynchronized access natively, so you're still completely vulnerable to deadlocks and race conditions if you mess up your lock discipline.
 
-#### 5. CSP/Channels (Go-style) in Elixir
-**What maps naturally:** The BEAM virtual machine makes this pretty easy on the surface. Both the spawn or GenServer give you incredibly lightweight, isolated processes that map perfectly to the concept of goroutines. Both Go and Elixir are designed around the idea of spinning up massive numbers of concurrent entities and passing discrete data payloads between them. BEAMS' sceduler handles these tiny processes with the exact same kind of efficienty that the GO runtime scheduler handles goroutines, making the build and teh way these two models work feel very similar.
+#### 5. Go-style CSP/Channels  in Elixir
+**What maps naturally:** The BEAM virtual machine makes this pretty easy on the surface. Both the spawn or GenServer have very lightweight, isolated processes that map perfectly to the concept of goroutines. Both Go and Elixir are designed around and to handle thousands of tiny units running at the same time, just passing little bits of data back and forth. BEAMS' sceduler handles these tiny processes with the exact same kind of efficienty that the GO runtime scheduler handles goroutines, making the build and teh way these two models work feel very similar.
 
-**What requires simulation:** The main issue is blocking. Unbuffered Go channels use "rendezvous synchronization"—the sender literally stops and blocks until the receiver is ready. Elixir’s message passing is completely asynchronous so it sends the signal then forgets it. To simulate that synchronous block, you have to build a strict call/reply mechanism.
+**What requires simulation:** The main issue is blocking. Unbuffered Go channels use "rendezvous synchronization" which is where the sender literally stops and blocks until the receiver is ready. Elixir’s message passing is completely asynchronous so it sends the signal then forgets it. To simulate that synchronous block, we would have to build a strict call/reply mechanism.
 
 ```elixir
 # Simulating a synchronous, blocking channel send via GenServer
@@ -106,7 +106,7 @@ The sender has to actively block and wait for a {:reply, ...}. This simulates th
 **What cannot be represented well:** Go's select block uses random selection when multiple channels are ready at once. Elixir's receive block doesn't work like that at all; it evaluates messages strictly sequentially from top to bottom based on pattern matching. You cannot cleanly represent true randomized selection of simultaneous events natively. Simulating it would mean pulling the whole mailbox into memory, shuffling it, and processing it out of order, which is incredibly slow and goes against OTP design principles.  
 
 #### 6. Shared Memory (Java-style) in Elixir
-**What maps naturally:** Absolutely nothing maps naturally here. The BEAM virtual machine strictly isolates processes, meaning no memory is ever shared between them. This isn't just a missing API; it's a hard runtime constraint, making the Java model totally foreign to Elixir.
+**What maps naturally:** Absolutely nothing maps naturally here. The BEAM virtual machine strictly isolates processes, meaning no memory is ever shared between them. This isn't just a missing API, it is a hard runtime constraint, making the Java model totally foreign to Elixir.
 
 **What requires simulation:** You must simulate shared memory using an `Agent` (or an ETS table).
 
