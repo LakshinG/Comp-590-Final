@@ -106,7 +106,7 @@ The sender has to actively block and wait for a {:reply, ...}. This simulates th
 **What cannot be represented well:** Go's select block uses random selection when multiple channels are ready at once. Elixir's receive block doesn't work like that at all; it evaluates messages strictly sequentially from top to bottom based on pattern matching. You cannot cleanly represent true randomized selection of simultaneous events natively. Simulating it would mean pulling the whole mailbox into memory, shuffling it, and processing it out of order, which is incredibly slow and goes against OTP design principles.  
 
 #### 6. Shared Memory (Java-style) in Elixir
-**What maps naturally:** Absolutely nothing maps naturally here. The BEAM virtual machine strictly isolates processes, meaning no memory is ever shared between them. This isn't just a missing API, it is a hard runtime constraint, making the Java model totally foreign to Elixir.
+**What maps naturally:** Absolutely nothing maps naturally here. The BEAM virtual machine strictly isolates processes, so there is no memory is ever shared between them. That lack of shared memory is not something that can be added on, it is more of a hard runtime constraint. Trying to find a Java way of doing this isnt possible, since the BEAM was built from the ground up to keep processes isolated. 
 
 **What requires simulation:** You must simulate shared memory using an `Agent` (or an ETS table).
 
@@ -118,11 +118,9 @@ The sender has to actively block and wait for a {:reply, ...}. This simulates th
 Agent.update(shared_state, fn state -> state + 1 end)
 ```
 
-An Agent functions by wrapping the state inside a dedicated, isolated process and strictly serializing all access requests through sequential message passing. When benchmarking concurrent designs—such as comparing actor-style process rings in Elixir to threaded environments in Java—the simulation costs become bviously large. The latency of a simple state mutation transforms from a localized, nanosecond lock acquisition in Java to a full microsecond inter-process message round-trip on the BEAM. In high-contention scenarios, this serialization drastically limits system throughput.
+The way the Agent works is by wrapping the state inside a dedicated, isolated process and seperating all access requests with sequential message passing. When testing concurrent designs like the comparing actor style process rings in Elixir to threaded environments in Java, the simulation costs become bviously large. The latency of a simple state mutation turns from a localized quick lock acquisition in Java to a full microsecond inter process message round trip on the BEAM. Even though that doesnt seem like a big difference, in high contention scenarios this serialization significantly limits system throughput.
 
-**What cannot be represented well:** The defining characteristic of the shared-memory model—direct, low-latency access to a common address space—is completely eliminated. While the Agent provides the illusion of shared state to the programmer, it is structurally just the actor model applied to a stateful value. You cannot truly represent shared memory on a virtual machine explicitly engineered to prohibit it for the sake of fault tolerance.
-
----
+**What cannot be represented well:** The main thing that defines the shared memory model is getting fast, direct access to the same memory space, which we dont see here. An Agent is used to trick the whoever is running it into thinking they have shared state, but actually it’s really just the Actor model pretending to be something else. You just can't force a shared memory model onto a virtual machine that was literally built to ban it so it could have less faults and errors.
 
 ### Part 2: Best and Worst Judgments
 
